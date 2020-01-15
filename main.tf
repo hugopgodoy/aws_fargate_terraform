@@ -12,7 +12,7 @@ variable "availability_zone_east" {
 }
 
 provider "aws" {
-  region = "us-west-1"
+  region = "us-east-1"
 }
 
 resource "aws_vpc" "poc-vpc-01" {
@@ -48,7 +48,7 @@ data "aws_vpc" "selected" {
 
 resource "aws_subnet" "poc-subnet-public-01" {
   vpc_id            = data.aws_vpc.selected.id
-  availability_zone = var.availability_zone_west
+  availability_zone = var.availability_zone_east
   cidr_block        = cidrsubnet(data.aws_vpc.selected.cidr_block, 4, 1)
 
   tags = {
@@ -56,13 +56,10 @@ resource "aws_subnet" "poc-subnet-public-01" {
   }
 }
 
-data "aws_subnet" "selected" {
-  id = aws_subnet.poc-subnet-public-01.tags["Name"]
-}
 
 resource "aws_db_instance" "poc-db-01" {
   identifier                = "poc-db-01"
-  availability_zone         = var.availability_zone_west
+  availability_zone         = var.availability_zone_east
   engine                    = "postgres"
   engine_version            = "11.5"
   instance_class            = "db.t2.micro"
@@ -80,7 +77,7 @@ resource "aws_db_instance" "poc-db-01" {
 
   # vpc_security_group_ids    = [data.aws_security_group.default.id]
   # vpc ????
-  db_subnet_group_name      = data.aws_subnet.selected.id # ????????
+  # db_subnet_group_name      = data.aws_subnet.selected.id # ????????
 
   tags = {
     Owner       = "user"
