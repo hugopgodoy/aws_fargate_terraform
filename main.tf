@@ -15,7 +15,7 @@ provider "aws" {
   region = "us-west-1"
 }
 
-resource "aws_vpc" "main" {
+resource "aws_vpc" "poc-vpc-01" {
   assign_generated_ipv6_cidr_block = false
   cidr_block                       = "10.0.0.0/16"
   enable_dns_support               = true
@@ -43,10 +43,10 @@ resource "aws_vpc" "main" {
 # variable "vpc_id" {}
 
 data "aws_vpc" "selected" {
-  id = aws_vpc.main.id
+  id = aws_vpc.poc-vpc-01.id
 }
 
-resource "aws_subnet" "example" {
+resource "aws_subnet" "poc-subnet-public-01" {
   vpc_id            = data.aws_vpc.selected.id
   availability_zone = var.availability_zone_west
   cidr_block        = cidrsubnet(data.aws_vpc.selected.cidr_block, 4, 1)
@@ -56,29 +56,34 @@ resource "aws_subnet" "example" {
   }
 }
 
-# resource "aws_db_instance" "default" {
-#   identifier                = "sas-db-01"
-#   availability_zone         = var.availability_zone_west
-#   engine                    = "postgres"
-#   engine_version            = "11.5"
-#   instance_class            = "db.t2.micro"
-#   allocated_storage         = 20
+data "aws_subnet" "selected" {
+  id = aws_subnet.poc-subnet-public-01.tags["Name"]
+}
 
-#   name                      = "pocdb"
-#   username                  = "pocuser"
-#   password                  = "ci&t2020"
-#   port                      = "5432"
+resource "aws_db_instance" "poc-db-01" {
+  identifier                = "poc-db-01"
+  availability_zone         = var.availability_zone_west
+  engine                    = "postgres"
+  engine_version            = "11.5"
+  instance_class            = "db.t2.micro"
+  allocated_storage         = 20
 
-#   storage_encrypted         = false
-#   deletion_protection       = false
+  name                      = "poc_demo"
+  username                  = "poc_user"
+  password                  = "ci&t2020"
+  port                      = "5432"
 
-#   final_snapshot_identifier = true
+  storage_encrypted         = false
+  deletion_protection       = false
 
-#   # vpc_security_group_ids = [data.aws_security_group.default.id]
-#   # subnet_ids             = data.aws_subnet_ids.all.ids
+  final_snapshot_identifier = true
 
-#   tags = {
-#     Owner       = "user"
-#     Environment = "poc"
-#   }
-# }
+  # vpc_security_group_ids    = [data.aws_security_group.default.id]
+  # vpc ????
+  db_subnet_group_name      = data.aws_subnet.selected.id # ????????
+
+  tags = {
+    Owner       = "user"
+    Environment = "demo"
+  }
+}
