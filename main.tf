@@ -56,31 +56,65 @@ resource "aws_subnet" "poc-subnet-public-01" {
   }
 }
 
+resource "aws_security_group" "allow_db_access" {
+  name        = "allow_db_access"
+  description = "Allow postgres inbound traffic"
+  vpc_id      = data.aws_vpc.selected.id
 
-resource "aws_db_instance" "poc-db-01" {
-  identifier                = "poc-db-01"
-  availability_zone         = var.availability_zone_east
-  engine                    = "postgres"
-  engine_version            = "11.5"
-  instance_class            = "db.t2.micro"
-  allocated_storage         = 20
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    # cidr_blocks = # add your IP address here
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
 
-  name                      = "poc_demo"
-  username                  = "poc_user"
-  password                  = "ci&t2020"
-  port                      = "5432"
-
-  storage_encrypted         = false
-  deletion_protection       = false
-
-  final_snapshot_identifier = true
-
-  # vpc_security_group_ids    = [data.aws_security_group.default.id]
-  # vpc ????
-  # db_subnet_group_name      = data.aws_subnet.selected.id # ????????
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    # prefix_list_ids = ["pl-12c4e678"]
+  }
 
   tags = {
-    Owner       = "user"
-    Environment = "demo"
+    "Name" = "allow db pg"
   }
 }
+
+data "aws_security_group" "selected" {
+  id = aws_security_group.allow_db_access.id
+}
+
+
+# resource "aws_db_instance" "poc-db-01" {
+#   identifier                = "poc-db-01"
+#   availability_zone         = var.availability_zone_east
+#   engine                    = "postgres"
+#   engine_version            = "11.5"
+#   instance_class            = "db.t2.micro"
+#   allocated_storage         = 20
+
+#   name                      = "poc_demo"
+#   username                  = "poc_user"
+#   password                  = "ci&t2020"
+#   port                      = "5432"
+
+#   storage_encrypted         = false
+#   deletion_protection       = false
+
+#   # final_snapshot_identifier = true
+#   skip_final_snapshot       = true
+
+#   vpc_security_group_ids    = [data.aws_security_group.selected.id]
+#   # vpc ????
+#   # db_subnet_group_name      = data.aws_subnet.selected.id # ????????
+
+#   tags = {
+#     Owner       = "user"
+#     Environment = "demo"
+#   }
+# }
