@@ -40,6 +40,10 @@ resource "aws_vpc" "poc-vpc-01" {
   }
 }
 
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.poc-vpc-01.id
+}
+
 # variable "vpc_id" {}
 
 data "aws_vpc" "selected" {
@@ -85,9 +89,112 @@ resource "aws_security_group" "allow_db_access" {
   }
 }
 
-data "aws_security_group" "selected" {
-  id = aws_security_group.allow_db_access.id
+
+resource "aws_security_group" "allow_net_access" {
+  name        = "allow_net_access"
+  description = "Allow internet inbound traffic"
+  vpc_id      = data.aws_vpc.selected.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    # cidr_blocks = # add your IP address here
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    # cidr_blocks = # add your IP address here
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    # prefix_list_ids = ["pl-12c4e678"]
+  }
+
+  tags = {
+    "Name" = "allow net"
+  }
 }
+
+resource "aws_security_group" "allow_ssh_access" {
+  name        = "allow_ssh_access"
+  description = "Allow ssh inbound traffic"
+  vpc_id      = data.aws_vpc.selected.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    
+    # Please restrict your ingress to only necessary IPs and ports.
+    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
+    # cidr_blocks = # add your IP address here
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    # prefix_list_ids = ["pl-12c4e678"]
+  }
+
+  tags = {
+    "Name" = "allow ssh"
+  }
+}
+
+
+
+resource "aws_instance" "poc-ec2-01" {
+  ami             = "ami-b374d5a5" # us-east-1
+  instance_type   = "t2.micro"
+
+  vpc_security_group_ids = [aws_security_group.allow_net_access.id, aws_security_group.allow_ssh_access.id, aws_security_group.allow_db_access.id]
+
+  subnet_id = aws_subnet.poc-subnet-public-01.id
+
+  provisioner "local-exec" {
+    command = "echo ${aws_instance.poc-ec2-01.public_ip} > ip_address.txt"
+  }  
+}
+
+
+# resource "aws_network_interface" "multi-ip" {
+#   subnet_id   = aws_subnet.poc-subnet-public-01.id
+#   # private_ips = ["10.0.0.10", "10.0.0.11"]
+# }
+
+resource "aws_eip" "one" {
+  vpc                       = true
+  # network_interface         = aws_network_interface.multi-ip.id
+  instance                  = aws_instance.poc-ec2-01.id
+  depends_on                = [aws_internet_gateway.gw]
+  # associate_with_private_ip = "10.0.0.10"
+}
+
+
+
+
+
+
+
+
 
 
 # resource "aws_db_instance" "poc-db-01" {
@@ -109,9 +216,9 @@ data "aws_security_group" "selected" {
 #   # final_snapshot_identifier = true
 #   skip_final_snapshot       = true
 
-#   vpc_security_group_ids    = [data.aws_security_group.selected.id]
+#   vpc_security_group_ids    = [aws_security_group.allow_db_access.id]
 #   # vpc ????
-#   # db_subnet_group_name      = data.aws_subnet.selected.id # ????????
+  # db_subnet_group_name      = data.aws_subnet.selected.id # ????????
 
 #   tags = {
 #     Owner       = "user"
