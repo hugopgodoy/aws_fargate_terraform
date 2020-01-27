@@ -6,7 +6,7 @@ variable "availability_zone_east_b" {
   default = "us-east-1b"
 }
 
-variable "availability_zone_east" {
+variable "availability_zone_east_a" {
   type    = string
   default = "us-east-1a"
 }
@@ -21,77 +21,85 @@ resource "aws_vpc" "poc_vpc_01" {
   enable_dns_support               = true
   instance_tenancy                 = "default" # or 'dedicated'
 
-  # arn                              = (known after apply)
-  # default_network_acl_id           = (known after apply)
-  # default_route_table_id           = (known after apply)
-  # default_security_group_id        = (known after apply)
-  # dhcp_options_id                  = (known after apply)
-  # enable_classiclink               = (known after apply)
-  # enable_classiclink_dns_support   = (known after apply)
   enable_dns_hostnames             = true
-  # id                               = (known after apply)
-  # ipv6_association_id              = (known after apply)
-  # ipv6_cidr_block                  = (known after apply)
-  # main_route_table_id              = (known after apply)
-  # owner_id                         = (known after apply)
 
   tags = {
-    "Name" = "poc-vpc-01"
+    "project" = "poc",
+    "Name"    = "poc-vpc-01"
   }
 }
 
-resource "aws_internet_gateway" "poc_gw" {
-  vpc_id = aws_vpc.poc_vpc_01.id
+
+resource "aws_route_table" "poc_router_table_private" {
+  vpc_id       = aws_vpc.poc_vpc_01.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.poc_natgateway.id
+  }
+
+  depends_on     = [aws_nat_gateway.poc_natgateway]
+
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc-router-table-nat"
+  }
 }
 
-
-resource "aws_route_table" "poc_router_table" {
-  vpc_id = aws_vpc.poc_vpc_01.id
+resource "aws_route_table" "poc_router_table_public" {
+  vpc_id       = aws_vpc.poc_vpc_01.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.poc_gw.id
+    gateway_id = aws_internet_gateway.poc_internetgateway.id
   }
 
   tags = {
-    Name = "poc_router_table"
+    "project" = "poc",
+    "Name"    = "poc-router-table-internetgateway"
   }
+
+  depends_on = [aws_internet_gateway.poc_internetgateway]
 }
 
-resource "aws_main_route_table_association" "a" {
-  vpc_id         = aws_vpc.poc_vpc_01.id
-  route_table_id = aws_route_table.poc_router_table.id
-}
-
-resource "aws_subnet" "poc_subnet_east_01" {
-  vpc_id            = aws_vpc.poc_vpc_01.id
-  availability_zone = var.availability_zone_east
-  # cidr_block        = cidrsubnet(aws_vpc.poc_vpc_01.cidr_block, 4, 1)
-  cidr_block = "10.0.0.0/24"
+resource "aws_subnet" "poc_subnet_public_01" {
+  vpc_id                  = aws_vpc.poc_vpc_01.id
+  availability_zone       = var.availability_zone_east_a
+  cidr_block              = "10.0.0.0/24"
 
   map_public_ip_on_launch = true
 
   tags = {
-    "Name" = "poc-subnet-east-01"
+    "project" = "poc",
+    "Name"    = "poc-subnet-public-01"
   }
 }
 
-resource "aws_subnet" "poc_subnet_east_02" {
-  vpc_id            = aws_vpc.poc_vpc_01.id
-  availability_zone = var.availability_zone_east_b
-  # cidr_block        = cidrsubnet(aws_vpc.poc_vpc_01.cidr_block, 4, 1)
-  cidr_block = "10.0.1.0/24"
-
-  map_public_ip_on_launch = true
+resource "aws_subnet" "poc_subnet_private_01" {
+  vpc_id                  = aws_vpc.poc_vpc_01.id
+  availability_zone       = var.availability_zone_east_a
+  cidr_block              = "10.0.1.0/24"
 
   tags = {
-    "Name" = "poc-subnet-west-01"
+    "project" = "poc",
+    "Name"    = "poc-subnet-private-01"
+  }
+}
+
+resource "aws_subnet" "poc_subnet_private_02" {
+  vpc_id                  = aws_vpc.poc_vpc_01.id
+  availability_zone       = var.availability_zone_east_b
+  cidr_block              = "10.0.2.0/24"
+
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc-subnet-private-02"
   }
 }
 
 resource "aws_security_group" "allow_db_access" {
   name        = "allow-db-access"
-  description = "Allow postgres inbound traffic"
+  description = "Allow db inbound traffic"
   vpc_id      = aws_vpc.poc_vpc_01.id
 
   ingress {
@@ -99,22 +107,19 @@ resource "aws_security_group" "allow_db_access" {
     to_port     = 5432
     protocol    = "tcp"
     
-    # Please restrict your ingress to only necessary IPs and ports.
-    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
-    # cidr_blocks = # add your IP address here
-    cidr_blocks     = ["0.0.0.0/0"]
+    cidr_blocks  = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    cidr_blocks     = ["0.0.0.0/0"]
-    # prefix_list_ids = ["pl-12c4e678"]
+    from_port    = 0
+    to_port      = 0
+    protocol     = "-1"
+    cidr_blocks  = ["0.0.0.0/0"]
   }
 
   tags = {
-    "Name" = "allow db pg"
+    "project" = "Name",
+    "Name"    = "allow_db_access"
   }
 }
 
@@ -125,48 +130,39 @@ resource "aws_security_group" "allow_net_access" {
   vpc_id      = aws_vpc.poc_vpc_01.id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    from_port    = 80
+    to_port      = 80
+    protocol     = "tcp"
     
-    # Please restrict your ingress to only necessary IPs and ports.
-    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
-    # cidr_blocks = # add your IP address here
     cidr_blocks     = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port    = 443
+    to_port      = 443
+    protocol     = "tcp"
     
-    # Please restrict your ingress to only necessary IPs and ports.
-    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
-    # cidr_blocks = # add your IP address here
-    cidr_blocks     = ["0.0.0.0/0"]
+    cidr_blocks  = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
+    from_port    = 8080
+    to_port      = 8080
+    protocol     = "tcp"
     
-    # Please restrict your ingress to only necessary IPs and ports.
-    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
-    # cidr_blocks = # add your IP address here
     cidr_blocks     = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    cidr_blocks     = ["0.0.0.0/0"]
-    # prefix_list_ids = ["pl-12c4e678"]
+    from_port    = 0
+    to_port      = 0
+    protocol     = "-1"
+    cidr_blocks  = ["0.0.0.0/0"]
   }
 
   tags = {
-    "Name" = "allow net"
+    "project" = "poc"
+    "Name"    = "allow_net_access"
   }
 }
 
@@ -180,9 +176,6 @@ resource "aws_security_group" "allow_ssh_access" {
     to_port     = 22
     protocol    = "tcp"
     
-    # Please restrict your ingress to only necessary IPs and ports.
-    # Opening to 0.0.0.0/0 can lead to security vulnerabilities.
-    # cidr_blocks = # add your IP address here
     cidr_blocks     = ["0.0.0.0/0"]
   }
 
@@ -191,36 +184,36 @@ resource "aws_security_group" "allow_ssh_access" {
     to_port         = 0
     protocol        = "-1"
     cidr_blocks     = ["0.0.0.0/0"]
-    # prefix_list_ids = ["pl-12c4e678"]
   }
 
   tags = {
-    "Name" = "allow ssh"
+    "project" = "poc",
+    "Name"    = "allow_ssh_access"
   }
 }
 
-# resource "aws_network_interface" "multi_ip" {
-#    subnet_id = aws_subnet.poc_subnet_east_01.id
-#   # private_ips = ["10.0.0.10", "10.0.0.11"]
-#   # vpc_id      = aws_vpc.poc_vpc_01.id
-#   # availability_zone = 
-# }
-
-
 resource "aws_instance" "poc_ec2_01" {
-  ami             = "ami-b374d5a5" # us-east-1
-  instance_type   = "t2.micro"
+  ami                         = "ami-04b9e92b5572fa0d1" # us-east-1
+  instance_type               = "t2.micro"
 
-  vpc_security_group_ids = [aws_security_group.allow_net_access.id, aws_security_group.allow_ssh_access.id, aws_security_group.allow_db_access.id]
+  vpc_security_group_ids      = [aws_security_group.allow_net_access.id, aws_security_group.allow_ssh_access.id, aws_security_group.allow_db_access.id]
 
-  subnet_id = aws_subnet.poc_subnet_east_01.id
+  subnet_id                   = aws_subnet.poc_subnet_public_01.id
 
-  key_name = "poc-keypair-01"
+  key_name                    = "poc-keypair-01"
   associate_public_ip_address = true
+
 
   provisioner "local-exec" {
     command = "echo ${aws_instance.poc_ec2_01.public_ip} > ip_address.txt"
-  }  
+  }
+
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc_ec2_01"
+  }
+
+  depends_on = [aws_internet_gateway.poc_internetgateway]  
 }
 
 resource "aws_key_pair" "poc_keypair_01" {
@@ -228,28 +221,67 @@ resource "aws_key_pair" "poc_keypair_01" {
   public_key = file("~/.ssh/id_rsa.pub")
 }
 
+
+resource "aws_internet_gateway" "poc_internetgateway" {
+  vpc_id = aws_vpc.poc_vpc_01.id
+
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc-iternetgateway"
+  }
+}
+
 resource "aws_eip" "poc_eip_01" {
-  vpc                       = true
-  # network_interface         = aws_network_interface.multi-ip.id # instancia OU interface
-  instance                  = aws_instance.poc_ec2_01.id
-  depends_on                = [aws_internet_gateway.poc_gw]
-  # associate_with_private_ip = "10.0.0.10"
+  vpc = true
+  
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc-eip-01"
+  }
+
+  depends_on = [aws_internet_gateway.poc_internetgateway]
+}
+
+resource "aws_nat_gateway" "poc_natgateway" {
+  allocation_id = aws_eip.poc_eip_01.id
+  subnet_id     = aws_subnet.poc_subnet_public_01.id
+
+  tags = {
+    "project" = "poc",
+    "Name"    = "poc-natgateway"
+  }
 }
 
 
 resource "aws_db_subnet_group" "poc_dbsubnetgroup_01" {
   name       = "poc-dbsubnetgroup-01"
-  subnet_ids = [aws_subnet.poc_subnet_east_01.id, aws_subnet.poc_subnet_east_02.id]
+  subnet_ids = [aws_subnet.poc_subnet_private_01.id, aws_subnet.poc_subnet_private_02.id]
 
   tags = {
-    Name = "POC RDS subnet group"
+    "project" = "poc",
+    "Name"    = "poc-dbsubnetgroup-01"
   }
+}
+
+resource "aws_route_table_association" "poc_router_subnet_public_01" {
+  subnet_id      = aws_subnet.poc_subnet_public_01.id
+  route_table_id = aws_route_table.poc_router_table_public.id
+}
+
+resource "aws_route_table_association" "poc_router_subnet_private_01" {
+  subnet_id      = aws_subnet.poc_subnet_private_01.id
+  route_table_id = aws_route_table.poc_router_table_private.id
+}
+
+resource "aws_route_table_association" "poc_router_subnet_private_02" {
+  subnet_id      = aws_subnet.poc_subnet_private_02.id
+  route_table_id = aws_route_table.poc_router_table_private.id
 }
 
 
 resource "aws_db_instance" "poc_db_01" {
   identifier                = "poc-db-01"
-  availability_zone         = var.availability_zone_east
+  availability_zone         = var.availability_zone_east_a
   engine                    = "postgres"
   engine_version            = "11.5"
   instance_class            = "db.t2.micro"
@@ -260,7 +292,7 @@ resource "aws_db_instance" "poc_db_01" {
   password                  = "ci&t2020"
   port                      = "5432"
 
-  publicly_accessible = true # fechar para nao acesso externo
+  publicly_accessible       = true # fechar para nao acesso externo
 
   storage_encrypted         = false
   deletion_protection       = false
@@ -272,7 +304,8 @@ resource "aws_db_instance" "poc_db_01" {
   db_subnet_group_name      = aws_db_subnet_group.poc_dbsubnetgroup_01.name
 
   tags = {
-    Owner       = "user"
-    Environment = "demo"
+    "project"     = "poc",
+    "Name"        = "poc-db-01",
+    "environment" = "demo"
   }
 }
