@@ -309,18 +309,3 @@ resource "aws_db_instance" "poc_db_01" {
     "environment" = "demo"
   }
 }
-
-
-resource "aws_ecr_repository" "poc_ecr_01" {
-  name                 = "poc-ecr-01"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = false
-  }
-
-  tags = {
-    "project" = "poc",
-    "Name"    = "poc-ecr-01"
-  }
-}
